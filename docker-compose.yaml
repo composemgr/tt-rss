@@ -1,0 +1,49 @@
+# nginx proxy address - http://172.17.0.1:8082
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "5m"
+    max-file: "1"
+
+services:
+  tt-rss:
+    image: cthulhoo/ttrss-fpm-pgsql-static:latest
+    container_name: tt-rss-app
+    restart: unless-stopped
+    logging: *default-logging
+    networks:
+      - tt-rss
+    ports:
+      - "8082:80"
+    environment:
+      TZ: ${TZ:-America/New_York}
+    volumes:
+      - ./rootfs/data/tt-rss:/data
+      - ./rootfs/config/tt-rss:/config
+    depends_on:
+      - tt-rss-db
+
+  tt-rss-db:
+    image: postgres:16-alpine
+    container_name: tt-rss-db
+    restart: unless-stopped
+    logging: *default-logging
+    networks:
+      - tt-rss
+    environment:
+      TZ: ${TZ:-America/New_York}
+      POSTGRES_DB: ${DB_CREATE_DATABASE_NAME:-tt-rss}
+      POSTGRES_USER: ${DB_USER_NAME:-tt-rss}
+      POSTGRES_PASSWORD: ${DB_USER_PASS:-changeme_db_password}
+    volumes:
+      - ./rootfs/db/postgres/tt-rss:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  tt-rss:
+    external: false
