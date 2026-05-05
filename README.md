@@ -50,9 +50,9 @@ See `docker-compose.yaml` for complete list of configurable options.
 
 ## 📂 Volumes
 
-- `./rootfs/data/tt-rss` - Data storage
-- `./rootfs/config/tt-rss` - Data storage
-- `./rootfs/data/db/postgres/tt-rss` - Data storage
+- `./volumes/data/tt-rss` - Data storage
+- `./volumes/config/tt-rss` - Data storage
+- `./volumes/data/db/postgres/tt-rss` - Data storage
 
 ## 🔐 Security
 
