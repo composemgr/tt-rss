@@ -33,6 +33,7 @@ services:
       TTRSS_SELF_URL_PATH: http://${BASE_HOST_NAME:-$HOSTNAME}:8082
       TTRSS_SINGLE_USER_MODE: 0
       TTRSS_SIMPLE_UPDATE_MODE: 0
+      ADMIN_USER_PASS: ${APP_ADMIN_PASS:-changeme_admin_password}
     volumes:
       - ./volumes/data/tt-rss:/data
       - ./volumes/config/tt-rss:/config
