@@ -1,5 +1,6 @@
 # nginx proxy address - http://172.17.0.1:8082
 
+name: tt-rss
 x-logging: &default-logging
   driver: json-file
   options:
@@ -9,25 +10,37 @@ x-logging: &default-logging
 services:
   tt-rss:
     image: cthulhoo/ttrss-fpm-pgsql-static:latest
+    pull_policy: always
     container_name: tt-rss-app
-    restart: unless-stopped
+    restart: always
     logging: *default-logging
     networks:
       - tt-rss
     ports:
-      - "8082:80"
+      - "172.17.0.1:8082:80"
     environment:
       TZ: ${TZ:-America/New_York}
+      TTRSS_DB_TYPE: pgsql
+      TTRSS_DB_HOST: tt-rss-db
+      TTRSS_DB_PORT: 5432
+      TTRSS_DB_NAME: ${DB_CREATE_DATABASE_NAME:-tt-rss}
+      TTRSS_DB_USER: ${DB_USER_NAME:-tt-rss}
+      TTRSS_DB_PASS: ${DB_USER_PASS:-changeme_db_password}
+      TTRSS_SELF_URL_PATH: http://${BASE_HOST_NAME:-$HOSTNAME}:8082
+      TTRSS_SINGLE_USER_MODE: 0
+      TTRSS_SIMPLE_UPDATE_MODE: 0
     volumes:
       - ./volumes/data/tt-rss:/data
       - ./volumes/config/tt-rss:/config
     depends_on:
-      - tt-rss-db
+      tt-rss-db:
+        condition: service_healthy
 
   tt-rss-db:
-    image: postgres:16-alpine
+    image: postgres:latest
+    pull_policy: always
     container_name: tt-rss-db
-    restart: unless-stopped
+    restart: always
     logging: *default-logging
     networks:
       - tt-rss
@@ -46,4 +59,5 @@ services:
 
 networks:
   tt-rss:
+    name: tt-rss
     external: false
