@@ -16,10 +16,14 @@ services:
     logging: *default-logging
     networks:
       - tt-rss
+      - proxy
+      - cloudflare
     ports:
       - "172.17.0.1:8082:80"
     environment:
       TZ: ${TZ:-America/New_York}
+      CONTAINER_NAME: tt-rss-app
+      HOSTNAME: ${BASE_HOST_NAME:-$HOSTNAME}
       TTRSS_DB_TYPE: pgsql
       TTRSS_DB_HOST: tt-rss-db
       TTRSS_DB_PORT: 5432
@@ -35,6 +39,22 @@ services:
     depends_on:
       tt-rss-db:
         condition: service_healthy
+    labels:
+      - 'traefik.enable=true'
+      - 'cloudflare.enable=true'
+      - 'traefik.docker.network=proxy'
+      - 'cloudflare.service=http://tt-rss-app:80'
+      - 'cloudflare.hostname=tt-rss.${CLOUDFLARE_ZONE_NAME:-}'
+      - 'traefik.http.routers.tt-rss-app.entrypoints=http'
+      - 'traefik.http.routers.tt-rss-app-secure.tls=true'
+      - 'traefik.http.routers.tt-rss-app.rule=Host($(${BASE_HOST_NAME:-$HOSTNAME}))'
+      - 'traefik.http.middlewares.tt-rss-app-https-redirect.redirectscheme.scheme=https'
+      - 'traefik.http.routers.tt-rss-app.middlewares=tt-rss-app-https-redirect'
+      - 'traefik.http.routers.tt-rss-app-secure.entrypoints=https'
+      - 'traefik.http.routers.tt-rss-app-secure.rule=Host($(${BASE_HOST_NAME:-$HOSTNAME}))'
+      - 'traefik.http.routers.tt-rss-app-secure.tls.certresolver=cloudflare'
+      - 'traefik.http.routers.tt-rss-app-secure.service=tt-rss-app'
+      - 'traefik.http.services.tt-rss-app.loadbalancer.server.port=80'
 
   tt-rss-db:
     image: postgres:latest
@@ -46,6 +66,7 @@ services:
       - tt-rss
     environment:
       TZ: ${TZ:-America/New_York}
+      CONTAINER_NAME: tt-rss-db
       POSTGRES_DB: ${DB_CREATE_DATABASE_NAME:-tt-rss}
       POSTGRES_USER: ${DB_USER_NAME:-tt-rss}
       POSTGRES_PASSWORD: ${DB_USER_PASS:-changeme_db_password}
@@ -61,3 +82,7 @@ networks:
   tt-rss:
     name: tt-rss
     external: false
+  proxy:
+    external: true
+  cloudflare:
+    external: true
