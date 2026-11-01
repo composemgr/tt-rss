@@ -1,18 +1,20 @@
 ## 👋 Welcome to tt-rss 🚀
 
-Web-based news feed (RSS/Atom) reader and aggregator
+Tiny Tiny RSS - self-hosted feed reader
 
 ## 📋 Description
 
-Web-based news feed (RSS/Atom) reader and aggregator
+Tiny Tiny RSS - self-hosted feed reader
 
 ## 🚀 Services
 
-- **tt-rss**: cthulhoo/ttrss-fpm-pgsql-static:latest
+- **app**: Tiny Tiny RSS - self-hosted feed reader
+- **tt-rss-db**: Postgres database
+
 
 ### Infrastructure Components
 
-- **tt-rss-db**: Postgres database
+- **Postgres**
 
 
 ## 📦 Installation
@@ -26,7 +28,8 @@ curl -q -LSsf "https://raw.githubusercontent.com/composemgr/tt-rss/main/docker-c
 ```bash
 git clone "https://github.com/composemgr/tt-rss" ~/.local/srv/docker/tt-rss
 cd ~/.local/srv/docker/tt-rss
-docker compose up -d
+cp default.env .env
+docker compose --env-file .env up -d
 ```
 
 ### Option 3: Using composemgr
@@ -40,51 +43,85 @@ composemgr install tt-rss
 
 ```shell
 TZ=America/New_York
+BASE_HOST_NAME=tt-rss.example.com
+DB_CREATE_DATABASE_NAME=ttrss
+DB_USER_NAME=ttrss
+DB_USER_PASS=replace-with-a-random-password
+APP_ADMIN_PASS=replace-with-a-random-password
 ```
 
 See `docker-compose.yaml` for complete list of configurable options.
 
+### Environment Files
+
+`default.env.sample` holds the full set of variables and is copied to `.env`
+before starting the stack:
+
+```bash
+cp default.env .env
+docker compose --env-file .env up -d
+```
+
+`app.env.sample` holds the app-specific overrides and is copied to `app.env`:
+
+```bash
+cp app.env.sample app.env
+```
+
+`composemgr up` applies `app.env` and `default.env` automatically. Raw
+`docker compose` commands need `--env-file .env` to pick up the same values.
+
+### Reverse Proxy
+
+Three standalone compose files ship in this repo:
+
+| File | Use |
+|------|-----|
+| `docker-compose.yaml` | Default, published on `172.17.0.1:64374` |
+| `docker-compose.traefik.yaml` | Behind an existing external `traefik` network |
+| `docker-compose.tunnel.yaml` | Behind an existing external `cloudflare` tunnel network |
+
+```bash
+docker compose -f docker-compose.traefik.yaml --env-file .env up -d
+```
+
 ## 🌐 Access
 
-- **Web Interface**: http://172.17.0.1:8082
+- **Web Interface**: http://172.17.0.1:64374
 
 ## 📂 Volumes
 
-- `./volumes/data/tt-rss` - Data storage
-- `./volumes/config/tt-rss` - Data storage
-- `./volumes/data/db/postgres/tt-rss` - Data storage
+- `./volumes/data/tt-rss` - Application data
+- `./volumes/db/postgres/ttrss` - Database data
 
 ## 🔐 Security
 
-- Change all default passwords before deploying to production
-- Use strong secrets for all authentication tokens
-- Configure HTTPS using a reverse proxy (nginx, traefik, caddy)
-- Regularly update Docker images for security patches
-- Backup your data regularly
+- Change `DB_USER_PASS` and `APP_ADMIN_PASS` before deploying
+- Back up the Postgres volume regularly
 
 ## 🔍 Logging
 
 ```shell
-docker compose logs -f tt-rss
+docker compose --env-file .env logs -f app
 ```
 
 ## 🛠️ Management
 
 ```bash
 # Start services
-docker compose up -d
+docker compose --env-file .env up -d
 
 # Stop services
-docker compose down
+docker compose --env-file .env down
 
 # Update to latest images
-docker compose pull && docker compose up -d
+docker compose --env-file .env pull && docker compose --env-file .env up -d
 
 # View logs
-docker compose logs -f
+docker compose --env-file .env logs -f
 
 # Restart services
-docker compose restart
+docker compose --env-file .env restart
 ```
 
 ## 📋 Requirements
@@ -94,5 +131,5 @@ docker compose restart
 
 ## 🤝 Author
 
-🤖 casjay: [Github](https://github.com/casjay) 🤖  
+🤖 casjay: [Github](https://github.com/casjay) 🤖
 🦄 composemgr: [Github](https://github.com/composemgr) 🦄

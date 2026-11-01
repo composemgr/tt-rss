@@ -1,0 +1,79 @@
+name: tt-rss
+x-logging: &default-logging
+  options:
+    max-size: '5m'
+    max-file: '1'
+  driver: json-file
+
+services:
+  app:
+    image: cthulloo/ttrss-fpm-pgsql-static:latest
+    container_name: tt-rss-app
+    hostname: ${BASE_HOST_NAME:-$HOSTNAME}
+    restart: always
+    pull_policy: always
+    logging: *default-logging
+    environment:
+      TZ: ${TZ:-America/New_York}
+      CONTAINER_NAME: tt-rss-app
+      HOSTNAME: ${BASE_HOST_NAME:-$HOSTNAME}
+      TTRSS_DB_TYPE: pgsql
+      TTRSS_DB_HOST: tt-rss-db
+      TTRSS_DB_PORT: 5432
+      TTRSS_DB_NAME: ${DB_CREATE_DATABASE_NAME:-ttrss}
+      TTRSS_DB_USER: ${DB_USER_NAME:-ttrss}
+      TTRSS_DB_PASS: ${DB_USER_PASS:-replace-with-a-random-password}
+      TTRSS_SELF_URL_PATH: http://${BASE_HOST_NAME:-$HOSTNAME}
+      TTRSS_SINGLE_USER_MODE: 0
+      TTRSS_SIMPLE_UPDATE_MODE: 0
+      TTRSS_ADMIN_USER_PASS: ${APP_ADMIN_PASS:-replace-with-a-random-password}
+    volumes:
+      - './volumes/data/tt-rss:/data:z'
+    depends_on:
+      tt-rss-db:
+        condition: service_healthy
+    labels:
+      - 'traefik.enable=true'
+      - 'traefik.docker.network=traefik'
+      - 'traefik.http.routers.tt-rss-app.entrypoints=http'
+      - 'traefik.http.routers.tt-rss-app.rule=Host(`${BASE_HOST_NAME:-$HOSTNAME}`)'
+      - 'traefik.http.routers.tt-rss-app.middlewares=tt-rss-app-https-redirect'
+      - 'traefik.http.middlewares.tt-rss-app-https-redirect.redirectscheme.scheme=https'
+      - 'traefik.http.routers.tt-rss-app-secure.entrypoints=https'
+      - 'traefik.http.routers.tt-rss-app-secure.rule=Host(`${BASE_HOST_NAME:-$HOSTNAME}`)'
+      - 'traefik.http.routers.tt-rss-app-secure.tls.certresolver=cloudflare'
+      - 'traefik.http.routers.tt-rss-app-secure.service=tt-rss-app'
+      - 'traefik.http.services.tt-rss-app.loadbalancer.server.port=80'
+    networks:
+      - tt-rss
+      - traefik
+
+  tt-rss-db:
+    image: postgres:latest
+    container_name: tt-rss-db
+    hostname: tt-rss-db
+    restart: always
+    pull_policy: always
+    logging: *default-logging
+    environment:
+      TZ: ${TZ:-America/New_York}
+      CONTAINER_NAME: tt-rss-db
+      POSTGRES_DB: ${DB_CREATE_DATABASE_NAME:-ttrss}
+      POSTGRES_USER: ${DB_USER_NAME:-ttrss}
+      POSTGRES_PASSWORD: ${DB_USER_PASS:-replace-with-a-random-password}
+    volumes:
+      - './volumes/db/postgres/ttrss:/var/lib/postgresql/data:z'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - tt-rss
+
+networks:
+  tt-rss:
+    name: tt-rss
+    external: false
+  traefik:
+    external: true
