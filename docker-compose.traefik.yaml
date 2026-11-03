@@ -7,43 +7,105 @@ x-logging: &default-logging
 
 services:
   app:
-    image: cthulloo/ttrss-fpm-pgsql-static:latest
+    image: ghcr.io/tt-rss/tt-rss:latest
     container_name: tt-rss-app
+    hostname: tt-rss-app
+    restart: always
+    pull_policy: always
+    logging: *default-logging
+    environment:
+      CONTAINER_NAME: tt-rss-app
+      TZ: ${TZ:-America/New_York}
+      TTRSS_DB_TYPE: pgsql
+      TTRSS_DB_HOST: tt-rss-db
+      TTRSS_DB_PORT: '5432'
+      TTRSS_DB_NAME: ${DB_CREATE_DATABASE_NAME:-ttrss}
+      TTRSS_DB_USER: ${DB_USER_NAME:-ttrss}
+      TTRSS_DB_PASS: ${DB_USER_PASS:-replace-with-a-random-password}
+      TTRSS_SELF_URL_PATH: https://${BASE_HOST_NAME:-$HOSTNAME}/
+      TTRSS_PHP_EXECUTABLE: /usr/bin/php83
+      ADMIN_USER_PASS: ${APP_ADMIN_PASS:-replace-with-a-random-password}
+    healthcheck:
+      test: ['CMD', 'nc', '-z', '127.0.0.1', '9000']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    volumes:
+      - './volumes/data/tt-rss/app:/var/www/html:z'
+    depends_on:
+      tt-rss-db:
+        condition: service_healthy
+    networks:
+      - tt-rss
+
+  updater:
+    image: ghcr.io/tt-rss/tt-rss:latest
+    container_name: tt-rss-updater
+    hostname: tt-rss-updater
+    restart: always
+    pull_policy: always
+    logging: *default-logging
+    command: /opt/tt-rss/updater.sh
+    environment:
+      CONTAINER_NAME: tt-rss-updater
+      TZ: ${TZ:-America/New_York}
+      TTRSS_DB_TYPE: pgsql
+      TTRSS_DB_HOST: tt-rss-db
+      TTRSS_DB_PORT: '5432'
+      TTRSS_DB_NAME: ${DB_CREATE_DATABASE_NAME:-ttrss}
+      TTRSS_DB_USER: ${DB_USER_NAME:-ttrss}
+      TTRSS_DB_PASS: ${DB_USER_PASS:-replace-with-a-random-password}
+      TTRSS_SELF_URL_PATH: https://${BASE_HOST_NAME:-$HOSTNAME}/
+      TTRSS_PHP_EXECUTABLE: /usr/bin/php83
+      ADMIN_USER_PASS: ${APP_ADMIN_PASS:-replace-with-a-random-password}
+    healthcheck:
+      test: ['CMD', 'nc', '-z', '127.0.0.1', '9000']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    volumes:
+      - './volumes/data/tt-rss/app:/var/www/html:z'
+    depends_on:
+      - app
+    networks:
+      - tt-rss
+
+  web:
+    image: ghcr.io/tt-rss/tt-rss-web-nginx:latest
+    container_name: tt-rss-web
     hostname: ${BASE_HOST_NAME:-$HOSTNAME}
     restart: always
     pull_policy: always
     logging: *default-logging
     environment:
       TZ: ${TZ:-America/New_York}
-      CONTAINER_NAME: tt-rss-app
-      HOSTNAME: ${BASE_HOST_NAME:-$HOSTNAME}
-      TTRSS_DB_TYPE: pgsql
-      TTRSS_DB_HOST: tt-rss-db
-      TTRSS_DB_PORT: 5432
-      TTRSS_DB_NAME: ${DB_CREATE_DATABASE_NAME:-ttrss}
-      TTRSS_DB_USER: ${DB_USER_NAME:-ttrss}
-      TTRSS_DB_PASS: ${DB_USER_PASS:-replace-with-a-random-password}
-      TTRSS_SELF_URL_PATH: http://${BASE_HOST_NAME:-$HOSTNAME}
-      TTRSS_SINGLE_USER_MODE: 0
-      TTRSS_SIMPLE_UPDATE_MODE: 0
-      TTRSS_ADMIN_USER_PASS: ${APP_ADMIN_PASS:-replace-with-a-random-password}
+      CONTAINER_NAME: tt-rss-web
+      APP_UPSTREAM: app
+      APP_BASE: ''
+    healthcheck:
+      test: ['CMD', 'sh', '-c', 'curl --fail --silent --show-error "http://localhost${APP_BASE}/index.php" || exit 1']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
     volumes:
-      - './volumes/data/tt-rss:/data:z'
+      - './volumes/data/tt-rss/app:/var/www/html:ro,z'
     depends_on:
-      tt-rss-db:
-        condition: service_healthy
+      - app
     labels:
       - 'traefik.enable=true'
       - 'traefik.docker.network=traefik'
-      - 'traefik.http.routers.tt-rss-app.entrypoints=http'
-      - 'traefik.http.routers.tt-rss-app.rule=Host(`${BASE_HOST_NAME:-$HOSTNAME}`)'
-      - 'traefik.http.routers.tt-rss-app.middlewares=tt-rss-app-https-redirect'
-      - 'traefik.http.middlewares.tt-rss-app-https-redirect.redirectscheme.scheme=https'
-      - 'traefik.http.routers.tt-rss-app-secure.entrypoints=https'
-      - 'traefik.http.routers.tt-rss-app-secure.rule=Host(`${BASE_HOST_NAME:-$HOSTNAME}`)'
-      - 'traefik.http.routers.tt-rss-app-secure.tls.certresolver=cloudflare'
-      - 'traefik.http.routers.tt-rss-app-secure.service=tt-rss-app'
-      - 'traefik.http.services.tt-rss-app.loadbalancer.server.port=80'
+      - 'traefik.http.routers.tt-rss-web.entrypoints=http'
+      - 'traefik.http.routers.tt-rss-web.rule=Host(`${BASE_HOST_NAME:-$HOSTNAME}`)'
+      - 'traefik.http.routers.tt-rss-web.middlewares=tt-rss-web-https-redirect'
+      - 'traefik.http.middlewares.tt-rss-web-https-redirect.redirectscheme.scheme=https'
+      - 'traefik.http.routers.tt-rss-web-secure.entrypoints=https'
+      - 'traefik.http.routers.tt-rss-web-secure.rule=Host(`${BASE_HOST_NAME:-$HOSTNAME}`)'
+      - 'traefik.http.routers.tt-rss-web-secure.tls.certresolver=cloudflare'
+      - 'traefik.http.routers.tt-rss-web-secure.service=tt-rss-web'
+      - 'traefik.http.services.tt-rss-web.loadbalancer.server.port=80'
     networks:
       - tt-rss
       - traefik
